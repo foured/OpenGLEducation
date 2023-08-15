@@ -18,6 +18,19 @@ public:
 			-0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f,	0.0f, 0.0f, // bottom left
 			 0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f,	1.0f, 0.0f  // bottom right
 		};
+
+		std::vector<unsigned int> indices = {
+			0, 1, 3,
+			1, 2, 3
+		};
+
+		BoundingRegion br(glm::vec3(-0.5f, -0.5f, 0.0f), glm::vec3(0.5f, 0.5f, 0.0f));
+
+		Mesh ret(br, {tex});
+		ret.loadData(Vertex::genList(quadVertices, noVertices), indices, true);
+
+		meshes.push_back(ret);
+		boundingRegions.push_back(br);
 	}
 };
 

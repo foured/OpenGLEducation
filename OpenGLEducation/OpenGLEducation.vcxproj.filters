@@ -90,6 +90,9 @@
     <None Include="assets\skybox\sky.fs" />
     <None Include="assets\outline.fs" />
     <None Include="assets\outline.vs" />
+    <None Include="assets\buffer.fs" />
+    <None Include="assets\buffer.vs" />
+    <None Include="assets\depth.fs" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\graphics\shader.h">
@@ -143,7 +146,7 @@
     <ClInclude Include="src\algorithms\bounds.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="src\graphics\glmemory.hpp">
+    <ClInclude Include="src\graphics\vertexmemory.hpp">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="src\algorithms\states.hpp">
@@ -168,6 +171,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="src\graphics\models\plane.hpp">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\graphics\framememory.hpp">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

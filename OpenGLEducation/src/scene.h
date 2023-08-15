@@ -14,6 +14,7 @@
 #include "graphics/light.h"
 #include "graphics/shader.h"
 #include "graphics/text.h"
+#include "graphics/framememory.hpp"
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -52,6 +53,8 @@ public:
 	//freetype library
 	FT_Library ft;
 	trie::Trie<TextRenderer> fonts;
+
+	FramebufferObject defaultFBO;
 
 	Scene();
 	Scene(int glfwVersionMajor, int glfwVersionMinor,

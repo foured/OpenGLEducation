@@ -18,8 +18,10 @@ public:
 
 	void generate();
 	void load(bool flip = true);
-
+	void allocate(GLenum format, GLuint width, GLuint height, GLuint type);
+	static void setParams(GLenum texMinFilter = GL_NEAREST, GLenum TexMagFilter = GL_NEAREST, GLenum wrapS = GL_REPEAT, GLenum wrapT = GL_REPEAT);
 	void bind();
+	void cleanup();
 
 	unsigned int id;
 	aiTextureType type;

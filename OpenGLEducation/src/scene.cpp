@@ -39,6 +39,9 @@ Scene::Scene(int glfwVersionMajor, int glfwVersionMinor,
     Scene::scrWidth = scrWidth;
     Scene::scrHeight = scrHeight;
 
+    //fbo
+    defaultFBO = FramebufferObject(scrWidth, scrHeight, GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
     // window color
     setWindowColor(0.1f, 0.15f, 0.15f, 1.0f);
 }
@@ -214,8 +217,9 @@ void Scene::processInput(float dt) {
 void Scene::update() {
     // set background color
     glClearColor(bg[0], bg[1], bg[2], bg[4]);
+
     // clear occupied bits
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    defaultFBO.clear();
 }
 
 // update screen after frame

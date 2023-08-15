@@ -26,12 +26,14 @@
 #include "graphics/light.h"
 #include "graphics/model.h"
 #include "graphics/cubemap.h"
+#include "graphics/framememory.hpp"
 
 #include "graphics/models/cube.hpp"
 #include "graphics/models/lamp.hpp"
 #include "graphics/models/gun.hpp"
 #include "graphics/models/sphere.hpp"
 #include "graphics/models/box.hpp"
+#include "graphics//models/plane.hpp"
 
 #include "physics/environment.h"
 
@@ -81,7 +83,9 @@ int main() {
 	Shader shader("assets/instanced/instanced.vs", "assets/object.fs");
 	Shader boxShader("assets/instanced/box.vs", "assets/instanced/box.fs");
 	Shader textShader("assets/text.vs", "assets/text.fs");
+
 	Shader outlineShader("assets/outline.vs", "assets/outline.fs");
+	Shader bufferShader("assets/buffer.vs", "assets/buffer.fs");
 	//Shader skyboxShader("assets/skybox/skybox.vs", "assets/skybox/sky.fs");
 
 	//skyboxShader.activate();
@@ -111,42 +115,36 @@ int main() {
 	Box box;
 	box.init();
 
-	//load all model data
-	scene.loadModels();
-
 	/*
 		FBO |=======================================================================================|
 	*/
+const GLuint BUFFER_WIDTH = 800, BUFFER_HEIGHT = 600;
+    FramebufferObject fbo(BUFFER_WIDTH, BUFFER_HEIGHT, GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+    fbo.generate();
+    fbo.bind();
 
-	const GLuint BUFFER_WIDTH = 800, BUFFER_HEIGHT = 600;
-	GLuint fbo;
-	glGenFramebuffers(1, &fbo);
+    Texture bufferTex("bufferTex");
+    bufferTex.bind();
+    bufferTex.allocate(GL_RGBA, BUFFER_WIDTH, BUFFER_HEIGHT, GL_UNSIGNED_BYTE);
+    Texture::setParams();
 
-	//init textures
-	Texture bufferTex("bufferTex");
+    fbo.attachTexture(GL_COLOR_ATTACHMENT0, bufferTex);
+    fbo.allocateAndAttachRBO(GL_DEPTH_STENCIL_ATTACHMENT, GL_DEPTH24_STENCIL8);
 
-	//setup texture vals
-	bufferTex.bind();
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, BUFFER_WIDTH, BUFFER_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-	glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cout << "ERROR with framebuffer" << std::endl;
+    }
 
-	//attach texture to FBO
-	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, bufferTex.id, 0);
+    scene.defaultFBO.bind(); // rebind default framebuffer
 
+	//setup plane
+	Plane map;
+	map.init(bufferTex);
+	scene.registerModel(&map);
 
-	//renderbuffer to store color buffer unformated
-	GLuint rbo;
-	glGenRenderbuffers(1, &rbo);
-	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+	//load all model data
+	scene.loadModels();
 
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB, BUFFER_WIDTH, BUFFER_HEIGHT);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rbo);
-
-	glBindBuffer(GL_FRAMEBUFFER, 0);
 
 	/*
 		lights	|===================================================================================|
@@ -217,6 +215,9 @@ int main() {
 
 	scene.generateInstance(cube.id, glm::vec3(20.0f, 0.1f, 20.0f), 100.0f, glm::vec3(0.0f, -3.0f, 0.0f));
 	
+	//instantiate texture quad
+	scene.generateInstance(map.id, glm::vec3(2.0f, 2.0f, 0.0f), 0.0f, glm::vec3(0.0f));
+
 	//insatntiate instances
 	scene.initInstances();
 
@@ -240,9 +241,7 @@ int main() {
 		processInput(deltaTime);
 
 		//render scene to the custom framebuffer
-		glViewport(0, 0, BUFFER_WIDTH, BUFFER_HEIGHT);
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+		fbo.activate();
 
 		//render skybox
 		//skyboxShader.activate();
@@ -308,9 +307,11 @@ int main() {
 		//render texture
 		
 		//rebind default framebuffer
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glViewport(0, 0, 800, 600);
+		scene.defaultFBO.activate();
 
+		//render quad
+		scene.renderShader(bufferShader, false);
+		scene.renderInstances(map.id, bufferShader, deltaTime);
 
 		//send new frame
 		scene.newFrame(box);
@@ -318,15 +319,16 @@ int main() {
 	}
 
 	//skybox.cleanup();
+	fbo.cleanup();
 	scene.cleanup();
 	return 0;
 }
 
 void launchItem() {
-	RigidBody* rb = scene.generateInstance(sphere.id, glm::vec3(0.1f), 1.0f, cam.cameraPos);
+	RigidBody* rb = scene.generateInstance(sphere.id, glm::vec3(0.5f), 1.0f, cam.cameraPos);
 	if (rb) {
 		// instance generated
-		rb->transferEnergy(1000.0f, cam.cameraFront);
+		rb->transferEnergy(500.0f, cam.cameraFront);
 		rb->applyAcceleration(Environment::gravitationalAcceleration);
 	}
 }
