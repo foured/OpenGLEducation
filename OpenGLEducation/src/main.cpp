@@ -44,6 +44,7 @@
 Scene scene;
 
 void processInput(double dt);
+void renderScene(Shader shader);
 
 Camera cam;
 
@@ -57,6 +58,7 @@ float lastFrame = 0.0f;
 float sensitivity = 0.1f;
 
 Sphere sphere(10);
+Cube cube(10);
 
 glm::vec3 baseColor = glm::vec3(1.0f, 1.0f, 1.0f);
 /*
@@ -64,6 +66,7 @@ glm::vec3 baseColor = glm::vec3(1.0f, 1.0f, 1.0f);
 */
 int main() {
 	std::cout << "Program started." << std::endl;
+	std::cout << "" << std::endl;
 
 	scene = Scene(3, 3, "OpenGL education.", 800, 600);
 	if (!scene.init()) {
@@ -79,13 +82,14 @@ int main() {
 		shaders   |==================================================================================|
 	*/
 
-	Shader lampShader("assets/instanced/instanced.vs", "assets/lamp.fs");
-	Shader shader("assets/instanced/instanced.vs", "assets/object.fs");
-	Shader boxShader("assets/instanced/box.vs", "assets/instanced/box.fs");
-	Shader textShader("assets/text.vs", "assets/text.fs");
+	Shader lampShader("assets/shaders/instanced/instanced.vs", "assets/shaders/lamp.fs");
+	Shader shader("assets/shaders/instanced/instanced.vs", "assets/shaders/object.fs");
+	Shader boxShader("assets/shaders/instanced/box.vs", "assets/shaders/instanced/box.fs");
+	Shader textShader("assets/shaders/text.vs", "assets/shaders/text.fs");
+	Shader dirLightShader("assets/shaders/shadows/directionalshadow.vs", "assets/shaders/shadows/shadow.fs");
 
-	Shader outlineShader("assets/outline.vs", "assets/outline.fs");
-	Shader bufferShader("assets/buffer.vs", "assets/buffer.fs");
+	Shader outlineShader("assets/shaders/outline.vs", "assets/shaders/outline.fs");
+	Shader bufferShader("assets/shaders/buffer.vs", "assets/shaders/buffer.fs");
 	//Shader skyboxShader("assets/skybox/skybox.vs", "assets/skybox/sky.fs");
 
 	//skyboxShader.activate();
@@ -104,42 +108,26 @@ int main() {
 		models   |===================================================================================|
 	*/
 
-	Lamp lamp(4);
-	scene.registerModel(&lamp);
+	//Lamp lamp(4);
+	//scene.registerModel(&lamp);
 
 	scene.registerModel(&sphere);
 
-	Cube cube(10);
 	scene.registerModel(&cube);
 
 	Box box;
 	box.init();
 
-	/*
-		FBO |=======================================================================================|
-	*/
-const GLuint BUFFER_WIDTH = 800, BUFFER_HEIGHT = 600;
-    FramebufferObject fbo(BUFFER_WIDTH, BUFFER_HEIGHT, GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-    fbo.generate();
-    fbo.bind();
-
-    Texture bufferTex("bufferTex");
-    bufferTex.bind();
-    bufferTex.allocate(GL_RGBA, BUFFER_WIDTH, BUFFER_HEIGHT, GL_UNSIGNED_BYTE);
-    Texture::setParams();
-
-    fbo.attachTexture(GL_COLOR_ATTACHMENT0, bufferTex);
-    fbo.allocateAndAttachRBO(GL_DEPTH_STENCIL_ATTACHMENT, GL_DEPTH24_STENCIL8);
-
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        std::cout << "ERROR with framebuffer" << std::endl;
-    }
-
-    scene.defaultFBO.bind(); // rebind default framebuffer
+	DirLight dirLight(
+		glm::vec3(-0.2f, -0.9f, -0.2f),
+		glm::vec4(glm::vec3(0.1f), 1.0f),
+		glm::vec4(glm::vec3(0.6f), 1.0f),
+		glm::vec4(0.7f, 0.7f, 0.7f, 1.0f),
+		BoundingRegion(glm::vec3(-20.0f, -20.0f, 0.5f), glm::vec3(20.0f, 20.0f, 20.0f)));
 
 	//setup plane
 	Plane map;
-	map.init(bufferTex);
+	map.init(dirLight.shadowFBO.textures[0]);
 	scene.registerModel(&map);
 
 	//load all model data
@@ -150,51 +138,45 @@ const GLuint BUFFER_WIDTH = 800, BUFFER_HEIGHT = 600;
 		lights	|===================================================================================|
 	*/
 
-	DirLight dirLight = { 
-		glm::vec3(-0.2f, -1.0f, -0.3f), 
-		glm::vec4(glm::vec3(0.1f), 1.0f),
-		glm::vec4(glm::vec3(0.4f), 1.0f), 
-		glm::vec4(glm::vec3(0.5f), 1.0f) };
-
 	scene.dirLight = &dirLight;
 
-	glm::vec3 pointLightPositions[] = {
-		glm::vec3(0.7f,  0.2f,  2.0f),
-		glm::vec3(2.3f, -3.3f, -4.0f),
-		glm::vec3(-4.0f,  2.0f, -12.0f),
-		glm::vec3(0.0f,  0.0f, -3.0f)
-	};
+	//glm::vec3 pointLightPositions[] = {
+	//	glm::vec3(0.7f,  0.2f,  2.0f),
+	//	glm::vec3(2.3f, -3.3f, -4.0f),
+	//	glm::vec3(-4.0f,  2.0f, -12.0f),
+	//	glm::vec3(0.0f,  0.0f, -3.0f)
+	//};
 
-	glm::vec4 ambient = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
-	glm::vec4 diffuse = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
-	glm::vec4 specular = glm::vec4(1.0f);
-	float k0 = 1.0f;
-	float k1 = 0.09f;
-	float k2 = 0.032f;
+	//glm::vec4 ambient = glm::vec4(0.05f, 0.05f, 0.05f, 1.0f);
+	//glm::vec4 diffuse = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+	//glm::vec4 specular = glm::vec4(1.0f);
+	//float k0 = 1.0f;
+	//float k1 = 0.09f;
+	//float k2 = 0.032f;
 
-	PointLight pointLights[4];
+	//PointLight pointLights[4];
 
-	for (unsigned int i = 0; i < 4; i++) {
-		pointLights[i] = {
-			pointLightPositions[i],
-			k0, k1, k2,
-			ambient, diffuse, specular
-		};
+	//for (unsigned int i = 0; i < 4; i++) {
+	//	pointLights[i] = {
+	//		pointLightPositions[i],
+	//		k0, k1, k2,
+	//		ambient, diffuse, specular
+	//	};
 
-		scene.generateInstance(lamp.id, glm::vec3(0.25f), 0.25f, pointLightPositions[i]),
-		scene.pointLights.push_back(&pointLights[i]);
-		States::activate(&scene.activePointLights, i);
-	}
+	//	scene.generateInstance(lamp.id, glm::vec3(0.25f), 0.25f, pointLightPositions[i]),
+	//	scene.pointLights.push_back(&pointLights[i]);
+	//	States::activate(&scene.activePointLights, i);
+	//}
 
-	SpotLight spotLight = {
-		cam.cameraPos, cam.cameraFront,
-		glm::cos(glm::radians(12.5f)), glm::cos(glm::radians(20.0f)),
-		1.0f, 0.07f, 0.032f,  
-		glm::vec4(glm::vec3(0.0f), 1.0f), glm::vec4(1.0f), glm::vec4(1.0f)
-	};
+	//SpotLight spotLight = {
+	//	cam.cameraPos, cam.cameraFront,
+	//	glm::cos(glm::radians(12.5f)), glm::cos(glm::radians(20.0f)),
+	//	1.0f, 0.07f, 0.032f,  
+	//	glm::vec4(glm::vec3(0.0f), 1.0f), glm::vec4(1.0f), glm::vec4(1.0f)
+	//};
 
-	scene.spotLights.push_back(&spotLight);
-	scene.activeSpotLights = 1;
+	//scene.spotLights.push_back(&spotLight);
+	//scene.activeSpotLights = 1;
 
 	glm::vec3 cubePositions[] = {
 	   { 1.0f, 3.0f, -5.0f },
@@ -224,6 +206,8 @@ const GLuint BUFFER_WIDTH = 800, BUFFER_HEIGHT = 600;
 	scene.prepare(box);
 
 	scene.variableLog["time"] = (double)0.0;
+
+	scene.defaultFBO.bind(); // rebind default framebuffer
 	/*
 		mian loop	|===================================================================================|
 	*/
@@ -240,26 +224,14 @@ const GLuint BUFFER_WIDTH = 800, BUFFER_HEIGHT = 600;
 
 		processInput(deltaTime);
 
-		//render scene to the custom framebuffer
-		fbo.activate();
-
-		//render skybox
-		//skyboxShader.activate();
-		//skyboxShader.setFloat("time", scene.variableLog["time"].val<float>());
-		//skybox.render(skyboxShader, &scene);
-
 		//text
-		scene.variableLog["X"] = scene.cameraPos.x;
+		/*scene.variableLog["X"] = scene.cameraPos.x;
 		scene.variableLog["Y"] = scene.cameraPos.y;
 		scene.variableLog["Z"] = scene.cameraPos.z;
 
 		scene.renderText("courer", textShader, "X: " + scene.variableLog["X"].dump() + " || Y: " + scene.variableLog["Y"].dump() + " || Z: " + scene.variableLog["Z"].dump(), 10.0f, 10.0f, glm::vec2(1.0f), baseColor);
 		scene.renderText("courer", textShader, "Time: " + scene.variableLog["time"].dump(), 10.0f, 25.0f, glm::vec2(1.0f), baseColor);
-		scene.renderText("courer", textShader, "FPS: " + scene.variableLog["fps"].dump(), 10.0f, 40.0f, glm::vec2(1.0f), baseColor);
-
-		//render lamps
-		scene.renderShader(lampShader, false);
-		scene.renderInstances(lamp.id, lampShader, deltaTime);
+		scene.renderText("courer", textShader, "FPS: " + scene.variableLog["fps"].dump(), 10.0f, 40.0f, glm::vec2(1.0f), baseColor);*/
 
 		//remove launched objs if to far
 		for (int i = 0; i < sphere.currentNoInstances; i++) {
@@ -272,46 +244,19 @@ const GLuint BUFFER_WIDTH = 800, BUFFER_HEIGHT = 600;
 			glStencilMask(0x00);
 		}
 
-		//render the launched objs
+		//render scene to dirlight FBO
+		dirLight.shadowFBO.activate();
+		scene.renderDirLightShader(dirLightShader);
+		renderScene(dirLightShader);
+
+		//render scene normally
+		scene.defaultFBO.activate();
 		scene.renderShader(shader);
-		if (sphere.currentNoInstances > 0) {
-			scene.renderInstances(sphere.id, shader, deltaTime);
-		}
-
-		if (scene.variableLog["dispOutline"].val<bool>()) {
-			glStencilFunc(GL_ALWAYS, 1, 0xFF);
-			glStencilMask(0xFF);
-			scene.renderInstances(cube.id, shader, deltaTime);
-
-			glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
-			glStencilMask(0x00);
-			glDisable(GL_DEPTH_TEST);
-
-			//draw outlines
-			scene.renderShader(outlineShader, false);
-			scene.renderInstances(cube.id, outlineShader, deltaTime);
-
-			glStencilFunc(GL_ALWAYS, 1, 0xFF);
-			glStencilMask(0xFF);
-			glEnable(GL_DEPTH_TEST);
-		}
-		else {
-			//render cubes normally
-			scene.renderInstances(cube.id, shader, deltaTime);
-		}
+		renderScene(shader);
 
 		//render boxes
 		//scene.renderShader(boxShader, false);
 		//box.render(boxShader);
-
-		//render texture
-		
-		//rebind default framebuffer
-		scene.defaultFBO.activate();
-
-		//render quad
-		scene.renderShader(bufferShader, false);
-		scene.renderInstances(map.id, bufferShader, deltaTime);
 
 		//send new frame
 		scene.newFrame(box);
@@ -319,16 +264,22 @@ const GLuint BUFFER_WIDTH = 800, BUFFER_HEIGHT = 600;
 	}
 
 	//skybox.cleanup();
-	fbo.cleanup();
 	scene.cleanup();
 	return 0;
+}
+
+void renderScene(Shader shader) {
+	if (sphere.currentNoInstances > 0) {
+		scene.renderInstances(sphere.id, shader, deltaTime);
+	}
+	scene.renderInstances(cube.id, shader, deltaTime);
 }
 
 void launchItem() {
 	RigidBody* rb = scene.generateInstance(sphere.id, glm::vec3(0.5f), 1.0f, cam.cameraPos);
 	if (rb) {
 		// instance generated
-		rb->transferEnergy(500.0f, cam.cameraFront);
+		rb->transferEnergy(100.0f, cam.cameraFront);
 		rb->applyAcceleration(Environment::gravitationalAcceleration);
 	}
 }
@@ -336,10 +287,10 @@ void launchItem() {
 void processInput(double dt) {
 	scene.processInput(dt);
 
-	if (States::isIndexActive(&scene.activeSpotLights, 0)) {
-		scene.spotLights[0]->position = scene.getActiveCamera()->cameraPos;
-		scene.spotLights[0]->direction = scene.getActiveCamera()->cameraFront;
-	}
+	//if (States::isIndexActive(&scene.activeSpotLights, 0)) {
+	//	scene.spotLights[0]->position = scene.getActiveCamera()->cameraPos;
+	//	scene.spotLights[0]->direction = scene.getActiveCamera()->cameraFront;
+	//}
 
 	if (Keyboard::key(GLFW_KEY_ESCAPE)) {
 		scene.setShouldClose(true);

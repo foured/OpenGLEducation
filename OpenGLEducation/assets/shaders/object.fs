@@ -32,6 +32,9 @@ struct DirLight{
 	vec4 ambient;
 	vec4 diffuse;
 	vec4 specular;
+
+	sampler2D depthBuffer;
+	mat4 lightSpaceMatrix;
 };
 
 uniform DirLight dirLight;
@@ -67,6 +70,7 @@ uniform vec3 viewPos;
 uniform bool useBlinn;
 uniform bool useGamma;
 
+float calcDirLightShadow();
 vec4 calcDirLight(vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap);
 vec4 calcPointLight(int idx, vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap);
 vec4 calcSpotLight(int idx, vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap);
@@ -118,6 +122,45 @@ void main(){
 	result.rgb *= 1 - factor;
 
 	FragColor = result;
+}
+
+float calcDirLightShadow(vec3 norm, vec3 lightDir){
+	vec4 fragPosLightSpace = dirLight.lightSpaceMatrix * vec4(FragPos, 1.0);
+
+	//perspective devide
+	vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w; // [depth relative to light] => [-1, 1]
+
+	//NDC to depht range
+	projCoords = projCoords * 0.5 + 0.5; //[-1, 1] => [0, 1]
+
+	//if to far return no shadow
+	if(projCoords.z > 1.0){
+		return 0.0;
+	}
+
+	//get the closest 
+	float closestDepth = texture(dirLight.depthBuffer, projCoords.xy).r;
+
+	//get depth of fragment
+	float currentDepth = projCoords.z;
+
+	//calulate bias
+	float maxBais = 0.05;
+	float minBais = 0.005;
+	float bais = max(maxBais * (1.0 - dot(norm, lightDir)), minBais);
+
+	//PCF
+	float shadowSum = 0.0;
+	vec2 texelSize = 1.0 / textureSize(dirLight.depthBuffer, 0);
+	for(int y = -1; y <= 1; y++ ){
+		for(int x = -1; x <= 1; x++ ){
+			float pcfDepth = texture(dirLight.depthBuffer, projCoords.xy + vec2(x,y) * texelSize).r;
+			shadowSum += currentDepth - bais > pcfDepth ? 1.0 : 0.0;
+		}
+	}
+
+	return shadowSum / 9.0;
+	//return currentDepth - bais > closestDepth ? 1.0 : 0.0;
 }
 
 vec4 calcPointLight(int idx, vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap){
@@ -182,7 +225,9 @@ vec4 calcDirLight(vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap){
 		specular = dirLight.specular * (spec * specMap);
 	}
 
-	return vec4(ambient + diffuse + specular);
+	float shadow = calcDirLightShadow(norm, lightDir);
+
+	return vec4(ambient + (1.0 - shadow) * (diffuse + specular));
 }
 
 vec4 calcSpotLight(int idx, vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap) {
