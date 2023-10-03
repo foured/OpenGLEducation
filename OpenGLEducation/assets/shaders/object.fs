@@ -54,6 +54,12 @@ struct SpotLight{
 	vec4 ambient;
 	vec4 diffuse;
 	vec4 specular;
+
+	float nearPlane;
+	float farPlane;
+
+	sampler2D depthBuffer;
+	mat4 lightSpaceMatrix;
 };
 
 uniform SpotLight spotLights[MAX_SPOT_LIGHTS];
@@ -70,6 +76,7 @@ uniform vec3 viewPos;
 uniform bool useBlinn;
 uniform bool useGamma;
 
+float calcSpotLightShadow();
 float calcDirLightShadow();
 vec4 calcDirLight(vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap);
 vec4 calcPointLight(int idx, vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap);
@@ -161,6 +168,50 @@ float calcDirLightShadow(vec3 norm, vec3 lightDir){
 
 	return shadowSum / 9.0;
 	//return currentDepth - bais > closestDepth ? 1.0 : 0.0;
+}
+
+float calcSpotLightShadow(int idx, vec3 norm, vec3 lightDir){
+	vec4 fragPosLightSpace = spotLights[idx].lightSpaceMatrix * vec4(FragPos, 1.0);
+
+	//perspective devide
+	vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w; // [depth relative to light] => [-1, 1]
+
+	//NDC to depht range
+	projCoords = projCoords * 0.5 + 0.5; //[-1, 1] => [0, 1]
+
+	//if to far return no shadow
+	if(projCoords.z > 1.0){
+		return 0.0;
+	}
+
+	//get the closest 
+	float closestDepth = texture(spotLights[idx].depthBuffer, projCoords.xy).r;
+
+	//linearize depth
+	float z = closestDepth * 2.0 - 1.0;
+	closestDepth = (2.0 * spotLights[idx].nearPlane * spotLights[idx].farPlane) /
+		(spotLights[idx].farPlane + spotLights[idx].nearPlane - z * (spotLights[idx].farPlane - spotLights[idx].nearPlane));
+	closestDepth /= spotLights[idx].farPlane;
+
+	//get depth of fragment
+	float currentDepth = projCoords.z;
+
+	//calulate bias
+	float maxBais = 0.05;
+	float minBais = 0.005;
+	float bais = max(maxBais * (1.0 - dot(norm, lightDir)), minBais);
+
+	//PCF
+	float shadowSum = 0.0;
+	vec2 texelSize = 1.0 / textureSize(spotLights[idx].depthBuffer, 0);
+	for(int y = -1; y <= 1; y++ ){
+		for(int x = -1; x <= 1; x++ ){
+			float pcfDepth = texture(spotLights[idx].depthBuffer, projCoords.xy + vec2(x,y) * texelSize).r;
+			shadowSum += currentDepth - bais > pcfDepth ? 1.0 : 0.0;
+		}
+	}
+
+	return shadowSum / 9.0;
 }
 
 vec4 calcPointLight(int idx, vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap){
@@ -272,7 +323,13 @@ vec4 calcSpotLight(int idx, vec3 norm, vec3 viewDir, vec4 diffMap, vec4 specMap)
 		float dist = length(spotLights[idx].position - FragPos);
 		float attenuation = 1.0 / (spotLights[idx].k0 + spotLights[idx].k1 * dist + spotLights[idx].k2 * (dist * dist));
 
-		return vec4(ambient + diffuse + specular) * attenuation;
+		ambient *= attenuation;
+		diffuse *= attenuation;
+		specular *= attenuation;
+
+		float shadow = calcSpotLightShadow(idx, norm, lightDir);
+
+		return vec4(ambient + (1.0 - shadow) * (diffuse + specular));
 	}
 	else {
 		// render just ambient
